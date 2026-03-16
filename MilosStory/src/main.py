@@ -1,0 +1,583 @@
+import pygame
+import sys
+import os
+
+# Add project root to path for imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from src.player import Player
+from src.game_platform import Platform
+from screens.title_screen import TitleScreen
+from src.level_system import create_level, get_level_background
+from src.boss import Boss
+from screens.victory_screen import VictoryScreen
+from screens.credits_screen import CreditsScreen
+from src.save_system import SaveSystem
+from src.enemy import Enemy
+from screens.level_selector import LevelSelector
+from src.arrow import Arrow
+
+# Initialize Pygame
+pygame.init()
+pygame.mixer.init()  # Initialize mixer for music
+
+# ========== DEBUG MODE ==========
+# Set to True to enable level selector for testing
+DEBUG_MODE = False
+# =================================
+
+# Constants
+SCREEN_WIDTH = 1200
+SCREEN_HEIGHT = 800
+FPS = 60
+GRAVITY = 0.7
+JUMP_STRENGTH = -20
+PLAYER_SPEED = 5
+
+# Colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+BLUE = (100, 150, 255)
+GREEN = (100, 200, 100)
+BROWN = (139, 69, 19)
+GRAY = (128, 128, 128)
+RED = (255, 100, 100)
+
+class Game:
+    def __init__(self):
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_caption("Milo's Story - Platformer")
+        self.clock = pygame.time.Clock()
+        self.running = True
+        
+        # Game state
+        self.state = "title"  # "title", "level_select", "playing", "victory", "credits"
+        self.current_level = 1
+        self.save_slot = None
+        
+        # Initialize systems
+        self.save_system = SaveSystem()
+        self.title_screen = TitleScreen(self.screen)
+        self.victory_screen = VictoryScreen(self.screen)
+        self.level_selector = LevelSelector(self.screen)
+        self.credits_screen = CreditsScreen(self.screen)
+        
+        # Level start position (for respawning)
+        self.level_start_x = 100
+        self.level_start_y = 100
+        
+        # Gameplay variables
+        self.player = None
+        self.platforms = []
+        self.lava_zones = []  # Lava areas that kill instantly
+        self.enemies = []
+        self.boss = None
+        self.arrows = []  # Player's shot arrows
+        self.camera_x = 0
+        self.camera_y = 0
+        self.world_width = SCREEN_WIDTH
+        self.world_height = SCREEN_HEIGHT
+        
+        # Boss fight variables
+        self.boss_damage_timer = 0
+        self.boss_damage_cooldown = 30  # Frames between damage
+        
+        # Player health
+        self.player_health = 100
+        self.max_health = 100
+        
+        # Aiming line toggle
+        self.show_aim_line = True  # Default: show aiming line
+        
+        # Music system
+        self.current_music = None  # Track currently playing music file
+        self.music_folder = "assets/music"
+    
+    def _find_music_file(self, level_num):
+        """Find music file for a level. Looks for level1, level2, etc. in any format."""
+        import glob
+        
+        # Try to find music folder (relative to project root)
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        music_path = os.path.normpath(os.path.join(base_dir, self.music_folder))
+        
+        if not os.path.exists(music_path):
+            return None
+        
+        # Look for files matching "level{num}.*" pattern
+        pattern = os.path.join(music_path, f"level{level_num}.*")
+        matches = glob.glob(pattern)
+        
+        if matches:
+            # Return first match (prioritize common formats)
+            audio_formats = ['.mp3', '.wav', '.ogg', '.m4a', '.flac']
+            for fmt in audio_formats:
+                for match in matches:
+                    if match.lower().endswith(fmt):
+                        return match
+            # If no preferred format found, return first match
+            return matches[0]
+        
+        return None
+    
+    def _play_level_music(self, level_num):
+        """Play music for a specific level"""
+        # Stop current music if playing
+        pygame.mixer.music.stop()
+        self.current_music = None
+        
+        # Find and play music for this level
+        music_file = self._find_music_file(level_num)
+        if music_file:
+            try:
+                pygame.mixer.music.load(music_file)
+                pygame.mixer.music.play(-1)  # Loop indefinitely
+                self.current_music = music_file
+            except Exception as e:
+                print(f"Error playing music {music_file}: {e}")
+    
+    def _stop_music(self):
+        """Stop currently playing music"""
+        pygame.mixer.music.stop()
+        self.current_music = None
+    
+    def _attempt_shoot_arrow(self):
+        if self.state != "playing" or not self.player:
+            return
+        mx, my = pygame.mouse.get_pos()
+        wx = mx + self.camera_x
+        wy = my + self.camera_y
+        arr = self.player.shoot_arrow(wx, wy)
+        if arr:
+            self.arrows.append(arr)
+        
+    def start_game(self, save_slot):
+        """Start a new game or load from save"""
+        self.save_slot = save_slot
+        
+        # Try to load save
+        save_data = self.save_system.load_game(save_slot)
+        if save_data:
+            self.current_level = save_data.get("level", 1)
+            start_x = save_data.get("player_x", 100)
+            start_y = save_data.get("player_y", 100)
+        else:
+            # New game
+            self.current_level = 1
+            start_x = 100
+            start_y = 100
+        
+        self.load_level(self.current_level, start_x, start_y)
+        self.state = "playing"
+    
+    def load_level(self, level_num, player_x=100, player_y=100):
+        """Load a specific level"""
+        self.current_level = level_num
+        
+        # Store level start position for respawning
+        self.level_start_x = player_x
+        self.level_start_y = player_y
+        
+        # Create player
+        self.player = Player(player_x, player_y, PLAYER_SPEED, GRAVITY, JUMP_STRENGTH)
+        
+        # Reset player health
+        self.player_health = self.max_health
+        
+        # Clear arrows when loading new level
+        self.arrows = []
+        
+        # Create platforms, enemies, and lava for level
+        self.platforms, self.enemies, self.lava_zones, self.world_width = create_level(
+            level_num, SCREEN_HEIGHT, SCREEN_WIDTH)
+        
+        # Create boss for level 10
+        self.boss = None
+        if level_num == 10:
+            self.boss = Boss(SCREEN_WIDTH // 2 - 60, SCREEN_HEIGHT - 200)
+        
+        # Reset camera
+        self.camera_x = 0
+        self.camera_y = 0
+        
+        # Reset boss damage timer
+        self.boss_damage_timer = 0
+        
+        # Play level music
+        self._play_level_music(level_num)
+    
+    def respawn_player(self):
+        """Restart game from level 1 when player dies"""
+        # Stop music
+        self._stop_music()
+        
+        # Clear all arrows
+        self.arrows = []
+        
+        # Delete save file if exists
+        if self.save_slot is not None:
+            self.save_system.delete_save(self.save_slot)
+        
+        # Reset to level 1
+        self.current_level = 1
+        self.save_slot = None
+        
+        # Load level 1 from scratch (music will play automatically)
+        self.load_level(1, 100, 100)
+    
+    def handle_events(self):
+        """Handle all game events"""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+                return
+            
+            if self.state == "title":
+                result = self.title_screen.handle_event(event)
+                if result == "quit":
+                    self.running = False
+                elif result == "credits":
+                    self.state = "credits"
+                elif result and result[0] == "start_game":
+                    if DEBUG_MODE:
+                        self.state = "level_select"
+                    else:
+                        self.start_game(result[1])
+            
+            
+            elif self.state == "level_select":
+                result = self.level_selector.handle_event(event)
+                if result == "cancel":
+                    self.state = "title"
+                elif result and result[0] == "start_level":
+                    self.current_level = result[1]
+                    self.save_slot = 0  # Use slot 0 for debug
+                    self.load_level(self.current_level, 100, 100)
+                    self.state = "playing"
+            
+            elif self.state == "playing":
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        # Save and return to title
+                        self.save_game()
+                        self._stop_music()
+                        self.state = "title"
+                    elif event.key == pygame.K_SPACE or event.key == pygame.K_UP:
+                        self.player.jump()
+                    elif event.key == pygame.K_6:
+                        # Toggle aiming line
+                        self.show_aim_line = not self.show_aim_line
+                    elif event.key == pygame.K_x or event.key == pygame.K_f:
+                        # Shoot arrow towards mouse position
+                        self._attempt_shoot_arrow()
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:  # Left click
+                        # Shoot arrow on mouse click
+                        self._attempt_shoot_arrow()
+            
+            elif self.state == "victory":
+                result = self.victory_screen.handle_event(event)
+                if result == "title":
+                    # Delete save file when OK is pressed (in case it wasn't deleted before)
+                    if self.save_slot is not None:
+                        self.save_system.delete_save(self.save_slot)
+                    self.state = "title"
+            
+            elif self.state == "credits":
+                result = self.credits_screen.handle_event(event)
+                if result == "title":
+                    self.state = "title"
+    
+    def save_game(self):
+        """Save current game state"""
+        if self.save_slot is not None and self.player:
+            self.save_system.save_game(
+                self.save_slot,
+                self.current_level,
+                self.player.x,
+                self.player.y
+            )
+    
+    def update(self):
+        """Update game state"""
+        if self.state == "title":
+            self.title_screen.update()
+        
+        elif self.state == "level_select":
+            self.level_selector.update()
+        
+        elif self.state == "playing":
+            keys = pygame.key.get_pressed()
+            
+            self.player.update(keys, self.platforms)
+            
+            # Update arrows
+            i = 0
+            while i < len(self.arrows):
+                arr = self.arrows[i]
+                if not arr.is_alive:
+                    self.arrows.pop(i)
+                    continue
+                arr.update()
+                if not arr.is_alive:
+                    self.arrows.pop(i)
+                    continue
+                arr_rect = arr.get_rect()
+                hit = False
+                for enemy in self.enemies:
+                    if enemy.is_alive and arr_rect.colliderect(enemy.get_rect()):
+                        enemy.take_damage(1)
+                        arr.is_alive = False
+                        hit = True
+                        break
+                if not hit and self.boss and self.boss.is_alive:
+                    if arr_rect.colliderect(self.boss.get_rect()):
+                        self.boss.take_damage(1)
+                        arr.is_alive = False
+                        hit = True
+                if arr.is_alive:
+                    i += 1
+                else:
+                    self.arrows.pop(i)
+            
+            # Update enemies (pass player position for chase AI)
+            for enemy in self.enemies[:]:
+                if enemy.is_alive:
+                    enemy.update(self.platforms, self.player.x, self.player.y)
+                    
+                    # Check collision with player
+                    player_rect = pygame.Rect(self.player.x, self.player.y, 
+                                            self.player.width, self.player.height)
+                    enemy_rect = enemy.get_rect()
+                    
+                    if player_rect.colliderect(enemy_rect):
+                        # Player takes damage from enemy
+                        self.player_health -= 1
+                        if self.player_health <= 0:
+                            # Respawn player at start of level
+                            self.respawn_player()
+                else:
+                    # Remove dead enemies
+                    self.enemies.remove(enemy)
+            
+            # Check lava collision (instant death)
+            player_rect = pygame.Rect(self.player.x, self.player.y, 
+                                     self.player.width, self.player.height)
+            for lava_zone in self.lava_zones:
+                lava_rect = pygame.Rect(lava_zone["x"], lava_zone["y"], 
+                                       lava_zone["width"], lava_zone["height"])
+                if player_rect.colliderect(lava_rect):
+                    # Instant death from lava
+                    self.respawn_player()
+            
+            # Update boss if present
+            if self.boss:
+                if self.boss.is_alive:
+                    self.boss.update(self.platforms, self.player.x, self.player.y)
+                    
+                    # Check boss-projectile collisions with player
+                    player_rect = pygame.Rect(self.player.x, self.player.y, 
+                                           self.player.width, self.player.height)
+                    if self.boss.check_projectile_collision(player_rect):
+                        # Boss projectile hits player - 20 damage
+                        self.player_health -= 20
+                        if self.player_health <= 0:
+                            self.respawn_player()
+                    
+                    # Check if player hits boss (boss damages player on contact)
+                    boss_rect = self.boss.get_rect()
+                    if player_rect.colliderect(boss_rect):
+                        # Boss damages player on contact - 20 damage
+                        self.boss_damage_timer += 1
+                        if self.boss_damage_timer >= self.boss_damage_cooldown:
+                            self.player_health -= 20
+                            self.boss_damage_timer = 0
+                            if self.player_health <= 0:
+                                self.respawn_player()
+                
+                # Check if boss is defeated (check outside the is_alive block)
+                if not self.boss.is_alive:
+                    # Delete save file after completing level 10
+                    if self.save_slot is not None:
+                        self.save_system.delete_save(self.save_slot)
+                    # Stop music and transition to victory screen
+                    self._stop_music()
+                    self.state = "victory"
+            
+            # Check if player reached end of level (for non-boss levels)
+            if self.current_level < 10:
+                if self.player.x >= self.world_width - 100:
+                    # Level complete
+                    self.current_level += 1
+                    self.save_game()
+                    if self.current_level <= 10:
+                        self.load_level(self.current_level, 100, 100)  # Music will change automatically
+                    else:
+                        # All levels complete
+                        self._stop_music()
+                        self.state = "victory"
+            
+            # Update camera to follow player
+            self.camera_x = self.player.x - SCREEN_WIDTH // 2
+            self.camera_x = max(0, min(self.camera_x, self.world_width - SCREEN_WIDTH))
+            
+            self.camera_y = self.player.y - SCREEN_HEIGHT // 2
+            self.camera_y = max(0, min(self.camera_y, self.world_height - SCREEN_HEIGHT))
+            
+            # Auto-save periodically
+            if pygame.time.get_ticks() % 3000 == 0:  # Every 3 seconds
+                self.save_game()
+        
+        elif self.state == "victory":
+            self.victory_screen.update()
+        
+        elif self.state == "credits":
+            self.credits_screen.update()
+    
+    def draw(self):
+        """Draw current game state"""
+        if self.state == "title":
+            self.title_screen.draw()
+        
+        elif self.state == "playing":
+            # Clear screen with level-specific background
+            bg_color = get_level_background(self.current_level)
+            self.screen.fill(bg_color)
+            
+            # Draw lava zones
+            for lava_zone in self.lava_zones:
+                screen_x = lava_zone["x"] - self.camera_x
+                screen_y = lava_zone["y"] - self.camera_y
+                lava_rect = pygame.Rect(screen_x, screen_y, lava_zone["width"], lava_zone["height"])
+                # Animated lava effect (simple pulsing)
+                pulse = int(pygame.time.get_ticks() / 100) % 2
+                lava_color = (255, 100 + pulse * 50, 0) if pulse else (255, 50, 0)
+                pygame.draw.rect(self.screen, lava_color, lava_rect)
+                # Lava bubbles
+                for i in range(5):
+                    bubble_x = screen_x + (i * lava_zone["width"] // 5) + int(pygame.time.get_ticks() / 50) % (lava_zone["width"] // 5)
+                    bubble_y = screen_y + lava_zone["height"] // 2
+                    pygame.draw.circle(self.screen, (255, 200, 0), 
+                                     (bubble_x % lava_zone["width"] + screen_x, bubble_y), 5)
+            
+            # Draw platforms
+            for platform in self.platforms:
+                platform.draw(self.screen, self.camera_x, self.camera_y)
+            
+            # Draw enemies
+            for enemy in self.enemies:
+                if enemy.is_alive:
+                    enemy.draw(self.screen, self.camera_x, self.camera_y)
+            
+            # Draw arrows
+            for arrow in self.arrows:
+                arrow.draw(self.screen, self.camera_x, self.camera_y)
+            
+            # Draw boss if present
+            if self.boss:
+                self.boss.draw(self.screen, self.camera_x, self.camera_y)
+            
+            # Draw player
+            self.player.draw(self.screen, self.camera_x, self.camera_y)
+            
+            # Draw aiming line if enabled
+            if self.show_aim_line:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                world_mouse_x = mouse_x + self.camera_x
+                world_mouse_y = mouse_y + self.camera_y
+                # Draw line from player center to mouse position
+                player_center_x = self.player.x + self.player.width // 2 - self.camera_x
+                player_center_y = self.player.y + self.player.height // 2 - self.camera_y
+                pygame.draw.line(self.screen, (255, 255, 0), 
+                               (player_center_x, player_center_y),
+                               (mouse_x, mouse_y), 2)
+                # Draw small circle at mouse position
+                pygame.draw.circle(self.screen, (255, 255, 0), (mouse_x, mouse_y), 5)
+            
+            # Draw UI
+            font = pygame.font.Font(None, 36)
+            level_text = font.render(f"Level: {self.current_level}", True, WHITE)
+            self.screen.blit(level_text, (10, 10))
+            
+            score_text = font.render(f"Score: {int(self.player.x // 10)}", True, WHITE)
+            self.screen.blit(score_text, (10, 50))
+            
+            # Player health bar
+            health_bar_width = 200
+            health_bar_height = 20
+            health_x = 10
+            health_y = 90
+            
+            # Background
+            pygame.draw.rect(self.screen, (100, 0, 0), 
+                          (health_x, health_y, health_bar_width, health_bar_height))
+            # Health
+            health_width = int((self.player_health / self.max_health) * health_bar_width)
+            pygame.draw.rect(self.screen, (255, 0, 0), 
+                          (health_x, health_y, health_width, health_bar_height))
+            # Border
+            pygame.draw.rect(self.screen, WHITE, 
+                          (health_x, health_y, health_bar_width, health_bar_height), 2)
+            
+            # Health text
+            health_text = font.render(f"Health: {self.player_health}/{self.max_health}", True, WHITE)
+            self.screen.blit(health_text, (220, 85))
+            
+            # Boss health if boss exists
+            if self.boss and self.boss.is_alive:
+                boss_text = font.render("BOSS FIGHT!", True, RED)
+                self.screen.blit(boss_text, (SCREEN_WIDTH - 200, 10))
+            
+            # Instructions with background for visibility
+            small_font = pygame.font.Font(None, 24)
+            instructions = [
+                "Arrow Keys / WASD: Move",
+                "Space / Up: Jump",
+                "X / F / Click: Shoot Arrow (aims at mouse)",
+                "6: Toggle Aiming Line",
+                "ESC: Save & Quit"
+            ]
+            # Draw semi-transparent background for instructions
+            instruction_bg_height = len(instructions) * 25 + 10
+            instruction_bg = pygame.Surface((400, instruction_bg_height))
+            instruction_bg.set_alpha(200)  # Semi-transparent
+            instruction_bg.fill((0, 0, 0))  # Black background
+            self.screen.blit(instruction_bg, (5, SCREEN_HEIGHT - instruction_bg_height - 5))
+            
+            # Draw instructions with bright text
+            for i, instruction in enumerate(instructions):
+                text = small_font.render(instruction, True, (255, 255, 255))  # Bright white
+                self.screen.blit(text, (10, SCREEN_HEIGHT - instruction_bg_height + 5 + i * 25))
+        
+        elif self.state == "level_select":
+            self.level_selector.draw()
+        
+        elif self.state == "victory":
+            self.victory_screen.draw()
+        
+        elif self.state == "credits":
+            self.credits_screen.draw()
+        
+        pygame.display.flip()
+    
+    def run(self):
+        """Main game loop"""
+        while self.running:
+            self.handle_events()
+            self.update()
+            self.draw()
+            self.clock.tick(FPS)
+        
+        # Stop music and save before quitting
+        self._stop_music()
+        if self.state == "playing":
+            self.save_game()
+        
+        pygame.quit()
+        sys.exit()
+
+if __name__ == "__main__":
+    game = Game()
+    game.run()

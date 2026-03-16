@@ -1,0 +1,2 @@
+# This file ensures the save_data directory is tracked by git
+# Save game files (.json) are ignored but the directory structure is preserved
