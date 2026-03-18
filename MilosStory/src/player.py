@@ -26,14 +26,10 @@ class Player:
         
         # Bow and arrow - infinite arrows, no cooldown
         
-        # Animation state
+        # Animation state (frozen - first frame only, no cycling)
         self.current_state = "standing"  # "standing", "walking", "falling"
         self.animation_frame = 0
-        self.animation_timer = pygame.time.get_ticks()  # Time when we last advanced frame
         self.facing_right = True  # Direction player is facing
-        
-        # Normal-speed frame durations (ms) - consistent playback per state
-        self.frame_duration_ms = {"standing": 150, "walking": 100, "falling": 80}
         
         # Load animations
         self.animations = {}
@@ -307,22 +303,11 @@ class Player:
             self.x = 0
             self.vel_x = 0
         
-        # Update animation state
+        # Update animation state (sprites switch by state, but frames stay frozen)
         new_state = self.get_animation_state()
         if new_state != self.current_state:
             self.current_state = new_state
             self.animation_frame = 0
-            self.animation_timer = pygame.time.get_ticks()
-        
-        # Update animation frame - use time-based duration for consistent speed
-        if self.current_state in self.animations:
-            frames = self.animations[self.current_state]
-            if len(frames) > 1:
-                duration_ms = self.frame_duration_ms.get(self.current_state, 100)
-                now = pygame.time.get_ticks()
-                if now - self.animation_timer >= duration_ms:
-                    self.animation_frame = (self.animation_frame + 1) % len(frames)
-                    self.animation_timer = now
     
     def draw(self, screen, camera_x, camera_y):
         # Draw player relative to camera
