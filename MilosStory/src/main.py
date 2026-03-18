@@ -3,7 +3,8 @@ import sys
 import os
 
 # Add project root to path for imports
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from src.paths import get_base_path
+project_root = get_base_path()
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -14,6 +15,7 @@ from src.level_system import create_level, get_level_background
 from src.boss import Boss
 from screens.victory_screen import VictoryScreen
 from screens.credits_screen import CreditsScreen
+from screens.options_screen import OptionsScreen, load_volume
 from src.save_system import SaveSystem
 from src.enemy import Enemy
 from screens.level_selector import LevelSelector
@@ -53,7 +55,7 @@ class Game:
         self.running = True
         
         # Game state
-        self.state = "title"  # "title", "level_select", "playing", "victory", "credits"
+        self.state = "title"  # "title", "level_select", "playing", "victory", "credits", "options"
         self.current_level = 1
         self.save_slot = None
         
@@ -63,6 +65,7 @@ class Game:
         self.victory_screen = VictoryScreen(self.screen)
         self.level_selector = LevelSelector(self.screen)
         self.credits_screen = CreditsScreen(self.screen)
+        self.options_screen = OptionsScreen(self.screen)
         
         # Level start position (for respawning)
         self.level_start_x = 100
@@ -74,7 +77,10 @@ class Game:
         self.lava_zones = []  # Lava areas that kill instantly
         self.enemies = []
         self.boss = None
+        self.chests = []
         self.arrows = []  # Player's shot arrows
+        self.arrow_count = 20  # Start with 20 arrows
+        self.player_damage = 1  # Hearts of damage per hit (1 = 1 heart)
         self.camera_x = 0
         self.camera_y = 0
         self.world_width = SCREEN_WIDTH
@@ -91,6 +97,9 @@ class Game:
         # Aiming line toggle
         self.show_aim_line = True  # Default: show aiming line
         
+        # Shoot cooldown (for held mouse/key - prevents instant drain)
+        self.shoot_cooldown = 0
+        
         # Music system
         self.current_music = None  # Track currently playing music file
         self.music_folder = "assets/music"
@@ -100,7 +109,7 @@ class Game:
         import glob
         
         # Try to find music folder (relative to project root)
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base_dir = get_base_path()
         music_path = os.path.normpath(os.path.join(base_dir, self.music_folder))
         
         if not os.path.exists(music_path):
@@ -122,6 +131,52 @@ class Game:
         
         return None
     
+    def _find_theme_music_file(self):
+        """Find theme music file. Looks for theme.* in any format."""
+        import glob
+        
+        base_dir = get_base_path()
+        music_path = os.path.normpath(os.path.join(base_dir, self.music_folder))
+        
+        if not os.path.exists(music_path):
+            return None
+        
+        pattern = os.path.join(music_path, "theme.*")
+        matches = glob.glob(pattern)
+        
+        if matches:
+            audio_formats = ['.mp3', '.wav', '.ogg', '.m4a', '.flac']
+            for fmt in audio_formats:
+                for match in matches:
+                    if match.lower().endswith(fmt):
+                        return match
+            return matches[0]
+        
+        return None
+    
+    def _apply_music_volume(self):
+        """Apply current volume from options to mixer"""
+        vol = load_volume() / 100.0
+        pygame.mixer.music.set_volume(vol)
+    
+    def _play_theme_music(self):
+        """Play theme music on title/save screen. Loops forever."""
+        theme_file = self._find_theme_music_file()
+        if not theme_file:
+            return
+        # Only load/play if not already playing this file
+        if self.current_music == theme_file and pygame.mixer.music.get_busy():
+            self._apply_music_volume()
+            return
+        try:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load(theme_file)
+            self._apply_music_volume()
+            pygame.mixer.music.play(loops=-1)
+            self.current_music = theme_file
+        except Exception as e:
+            print(f"Error playing theme music {theme_file}: {e}")
+    
     def _play_level_music(self, level_num):
         """Play music for a specific level"""
         # Stop current music if playing
@@ -133,7 +188,8 @@ class Game:
         if music_file:
             try:
                 pygame.mixer.music.load(music_file)
-                pygame.mixer.music.play(-1)  # Loop indefinitely
+                self._apply_music_volume()
+                pygame.mixer.music.play(loops=-1)  # Loop forever (repeat)
                 self.current_music = music_file
             except Exception as e:
                 print(f"Error playing music {music_file}: {e}")
@@ -146,12 +202,17 @@ class Game:
     def _attempt_shoot_arrow(self):
         if self.state != "playing" or not self.player:
             return
+        # Ensure arrow_count is int (in case of save data type)
+        count = int(self.arrow_count) if self.arrow_count is not None else 0
+        if count <= 0:
+            return
         mx, my = pygame.mouse.get_pos()
         wx = mx + self.camera_x
         wy = my + self.camera_y
         arr = self.player.shoot_arrow(wx, wy)
         if arr:
             self.arrows.append(arr)
+            self.arrow_count = count - 1
         
     def start_game(self, save_slot):
         """Start a new game or load from save"""
@@ -163,11 +224,15 @@ class Game:
             self.current_level = save_data.get("level", 1)
             start_x = save_data.get("player_x", 100)
             start_y = save_data.get("player_y", 100)
+            self.arrow_count = save_data.get("arrow_count", 20)
+            self.player_damage = save_data.get("player_damage", 1)
         else:
             # New game
             self.current_level = 1
             start_x = 100
             start_y = 100
+            self.arrow_count = 20
+            self.player_damage = 1
         
         self.load_level(self.current_level, start_x, start_y)
         self.state = "playing"
@@ -189,8 +254,8 @@ class Game:
         # Clear arrows when loading new level
         self.arrows = []
         
-        # Create platforms, enemies, and lava for level
-        self.platforms, self.enemies, self.lava_zones, self.world_width = create_level(
+        # Create platforms, enemies, lava, and chests for level
+        self.platforms, self.enemies, self.lava_zones, self.world_width, self.chests = create_level(
             level_num, SCREEN_HEIGHT, SCREEN_WIDTH)
         
         # Create boss for level 10
@@ -212,10 +277,12 @@ class Game:
         """Restart game from level 1 when player dies"""
         # Stop music
         self._stop_music()
-        
-        # Clear all arrows
+
+        # Clear all arrows and reset progress
         self.arrows = []
-        
+        self.arrow_count = 20
+        self.player_damage = 1
+
         # Delete save file if exists
         if self.save_slot is not None:
             self.save_system.delete_save(self.save_slot)
@@ -239,7 +306,10 @@ class Game:
                 if result == "quit":
                     self.running = False
                 elif result == "credits":
+                    self._stop_music()
                     self.state = "credits"
+                elif result == "options":
+                    self.state = "options"
                 elif result and result[0] == "start_game":
                     if DEBUG_MODE:
                         self.state = "level_select"
@@ -269,13 +339,13 @@ class Game:
                     elif event.key == pygame.K_6:
                         # Toggle aiming line
                         self.show_aim_line = not self.show_aim_line
-                    elif event.key == pygame.K_x or event.key == pygame.K_f:
-                        # Shoot arrow towards mouse position
+                    elif event.key in (pygame.K_x, pygame.K_f):
                         self._attempt_shoot_arrow()
+                        self.shoot_cooldown = 8
                 elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:  # Left click
-                        # Shoot arrow on mouse click
+                    if event.button == 1:
                         self._attempt_shoot_arrow()
+                        self.shoot_cooldown = 8
             
             elif self.state == "victory":
                 result = self.victory_screen.handle_event(event)
@@ -289,6 +359,11 @@ class Game:
                 result = self.credits_screen.handle_event(event)
                 if result == "title":
                     self.state = "title"
+            
+            elif self.state == "options":
+                result = self.options_screen.handle_event(event)
+                if result == "title":
+                    self.state = "title"
     
     def save_game(self):
         """Save current game state"""
@@ -297,12 +372,15 @@ class Game:
                 self.save_slot,
                 self.current_level,
                 self.player.x,
-                self.player.y
+                self.player.y,
+                self.arrow_count,
+                self.player_damage
             )
     
     def update(self):
         """Update game state"""
         if self.state == "title":
+            self._play_theme_music()
             self.title_screen.update()
         
         elif self.state == "level_select":
@@ -310,6 +388,18 @@ class Game:
         
         elif self.state == "playing":
             keys = pygame.key.get_pressed()
+            
+            # Decrement shoot cooldown
+            if self.shoot_cooldown > 0:
+                self.shoot_cooldown -= 1
+            
+            # Allow shooting while holding mouse or X/F key (with cooldown)
+            if self.shoot_cooldown == 0 and self.arrow_count > 0:
+                mouse_held = pygame.mouse.get_pressed()[0]
+                key_held = keys[pygame.K_x] or keys[pygame.K_f]
+                if mouse_held or key_held:
+                    self._attempt_shoot_arrow()
+                    self.shoot_cooldown = 8  # ~7 shots per second when held
             
             self.player.update(keys, self.platforms)
             
@@ -328,13 +418,13 @@ class Game:
                 hit = False
                 for enemy in self.enemies:
                     if enemy.is_alive and arr_rect.colliderect(enemy.get_rect()):
-                        enemy.take_damage(1)
+                        enemy.take_damage(self.player_damage)
                         arr.is_alive = False
                         hit = True
                         break
                 if not hit and self.boss and self.boss.is_alive:
                     if arr_rect.colliderect(self.boss.get_rect()):
-                        self.boss.take_damage(1)
+                        self.boss.take_damage(self.player_damage)
                         arr.is_alive = False
                         hit = True
                 if arr.is_alive:
@@ -362,9 +452,17 @@ class Game:
                     # Remove dead enemies
                     self.enemies.remove(enemy)
             
-            # Check lava collision (instant death)
+            # Check chest collection
             player_rect = pygame.Rect(self.player.x, self.player.y, 
                                      self.player.width, self.player.height)
+            for chest in self.chests:
+                result = chest.collect(player_rect)
+                if result:
+                    arrows_gain, damage_gain = result
+                    self.arrow_count += arrows_gain
+                    self.player_damage += damage_gain
+            
+            # Check lava collision (instant death)
             for lava_zone in self.lava_zones:
                 lava_rect = pygame.Rect(lava_zone["x"], lava_zone["y"], 
                                        lava_zone["width"], lava_zone["height"])
@@ -435,6 +533,10 @@ class Game:
         
         elif self.state == "credits":
             self.credits_screen.update()
+        
+        elif self.state == "options":
+            self.options_screen.update()
+            self._apply_music_volume()  # Apply volume changes in real-time
     
     def draw(self):
         """Draw current game state"""
@@ -465,6 +567,10 @@ class Game:
             # Draw platforms
             for platform in self.platforms:
                 platform.draw(self.screen, self.camera_x, self.camera_y)
+            
+            # Draw chests
+            for chest in self.chests:
+                chest.draw(self.screen, self.camera_x, self.camera_y)
             
             # Draw enemies
             for enemy in self.enemies:
@@ -501,14 +607,22 @@ class Game:
             level_text = font.render(f"Level: {self.current_level}", True, WHITE)
             self.screen.blit(level_text, (10, 10))
             
+            # Arrow count (top left, below level)
+            arrow_text = font.render(f"Arrows: {self.arrow_count}", True, (200, 200, 100))
+            self.screen.blit(arrow_text, (10, 45))
+            
+            # Damage (hearts) - top left
+            damage_text = font.render(f"Damage: {self.player_damage} heart{'s' if self.player_damage != 1 else ''}", True, (255, 100, 100))
+            self.screen.blit(damage_text, (10, 80))
+            
             score_text = font.render(f"Score: {int(self.player.x // 10)}", True, WHITE)
-            self.screen.blit(score_text, (10, 50))
+            self.screen.blit(score_text, (10, 115))
             
             # Player health bar
             health_bar_width = 200
             health_bar_height = 20
             health_x = 10
-            health_y = 90
+            health_y = 150
             
             # Background
             pygame.draw.rect(self.screen, (100, 0, 0), 
@@ -523,7 +637,7 @@ class Game:
             
             # Health text
             health_text = font.render(f"Health: {self.player_health}/{self.max_health}", True, WHITE)
-            self.screen.blit(health_text, (220, 85))
+            self.screen.blit(health_text, (220, 145))
             
             # Boss health if boss exists
             if self.boss and self.boss.is_alive:
@@ -536,8 +650,8 @@ class Game:
                 "Arrow Keys / WASD: Move",
                 "Space / Up: Jump",
                 "X / F / Click: Shoot Arrow (aims at mouse)",
-                "6: Toggle Aiming Line",
-                "ESC: Save & Quit"
+                "Chests: +14 arrows or +1 damage (walk near to collect)",
+                "6: Toggle Aiming Line | ESC: Save & Quit"
             ]
             # Draw semi-transparent background for instructions
             instruction_bg_height = len(instructions) * 25 + 10
@@ -559,6 +673,9 @@ class Game:
         
         elif self.state == "credits":
             self.credits_screen.draw()
+        
+        elif self.state == "options":
+            self.options_screen.draw()
         
         pygame.display.flip()
     

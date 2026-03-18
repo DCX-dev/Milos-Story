@@ -26,7 +26,11 @@ class TitleScreen:
     def _load_background(self):
         """Load first image file from background folder (supports any format)"""
         try:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            try:
+                from src.paths import get_base_path
+                base_dir = get_base_path()
+            except ImportError:
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             folder_path = os.path.normpath(os.path.join(base_dir, "assets", "background"))
             
             if not os.path.exists(folder_path):
@@ -107,7 +111,7 @@ class TitleScreen:
             # Credits button
             credits_font = pygame.font.Font(None, 48)
             credits_text = credits_font.render("Credits", True, (255, 255, 255))
-            credits_rect = credits_text.get_rect(center=(self.screen.get_width() // 2, 480))
+            credits_rect = credits_text.get_rect(center=(self.screen.get_width() // 2, 460))
             
             # Button background
             self.credits_button_rect = credits_rect.inflate(40, 20)
@@ -119,10 +123,23 @@ class TitleScreen:
             pygame.draw.rect(self.screen, (255, 255, 255), self.credits_button_rect, width=3, border_radius=10)
             self.screen.blit(credits_text, credits_rect)
             
+            # Options button
+            options_font = pygame.font.Font(None, 48)
+            options_text = options_font.render("Options", True, (255, 255, 255))
+            options_rect = options_text.get_rect(center=(self.screen.get_width() // 2, 540))
+            
+            self.options_button_rect = options_rect.inflate(40, 20)
+            is_options_hover = self.options_button_rect.collidepoint(mouse_pos)
+            options_button_color = (120, 150, 100) if is_options_hover else (100, 130, 80)
+            
+            pygame.draw.rect(self.screen, options_button_color, self.options_button_rect, border_radius=10)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.options_button_rect, width=3, border_radius=10)
+            self.screen.blit(options_text, options_rect)
+            
             # Quit button
             quit_font = pygame.font.Font(None, 48)
             quit_text = quit_font.render("Quit", True, (255, 255, 255))
-            quit_rect = quit_text.get_rect(center=(self.screen.get_width() // 2, 560))
+            quit_rect = quit_text.get_rect(center=(self.screen.get_width() // 2, 620))
             
             # Button background
             self.quit_button_rect = quit_rect.inflate(40, 20)
@@ -137,7 +154,7 @@ class TitleScreen:
             # Instructions
             inst_font = pygame.font.Font(None, 24)
             inst_text = inst_font.render("Select a save file to continue your adventure", True, (200, 200, 200))
-            inst_rect = inst_text.get_rect(center=(self.screen.get_width() // 2, 640))
+            inst_rect = inst_text.get_rect(center=(self.screen.get_width() // 2, 700))
             self.screen.blit(inst_text, inst_rect)
         else:
             # Show save slot selection
@@ -267,6 +284,9 @@ class TitleScreen:
                     # Check if credits button was clicked
                     elif hasattr(self, 'credits_button_rect') and self.credits_button_rect.collidepoint(mouse_pos):
                         return "credits"
+                    # Check if options button was clicked
+                    elif hasattr(self, 'options_button_rect') and self.options_button_rect.collidepoint(mouse_pos):
+                        return "options"
                     # Check if quit button was clicked
                     elif hasattr(self, 'quit_button_rect') and self.quit_button_rect.collidepoint(mouse_pos):
                         return "quit"

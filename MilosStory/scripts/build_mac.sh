@@ -1,9 +1,16 @@
 #!/bin/bash
 # Build script for Mac executable
+# Run from project root or MilosStory directory
+
+# Change to script directory, then to MilosStory project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR" || exit 1
 
 echo "=========================================="
 echo "Building Mac executable for Milo's Story"
 echo "=========================================="
+echo "  Project dir: $PROJECT_DIR"
 echo ""
 
 # Activate virtual environment if it exists
@@ -16,17 +23,21 @@ else
 fi
 echo ""
 
-# Check if PyInstaller is installed
+# Check if PyInstaller is installed (prefer python3 on Mac)
+PY_CMD="python"
+if ! command -v python &> /dev/null && command -v python3 &> /dev/null; then
+    PY_CMD="python3"
+fi
 echo "[2/5] Checking PyInstaller installation..."
-if ! python -m pip show pyinstaller &> /dev/null; then
+if ! $PY_CMD -m pip show pyinstaller &> /dev/null; then
     echo "  Installing PyInstaller..."
-    python -m pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org pyinstaller
+    $PY_CMD -m pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org pyinstaller
     if [ $? -eq 0 ]; then
         echo "✓ PyInstaller installed"
     else
         echo "✗ Failed to install PyInstaller"
         echo "  Trying system PyInstaller..."
-        if command -v pyinstaller &> /dev/null || python3 -m pip show pyinstaller &> /dev/null; then
+        if command -v pyinstaller &> /dev/null || $PY_CMD -m pip show pyinstaller &> /dev/null; then
             echo "✓ PyInstaller found in system"
         else
             echo "✗ Could not install PyInstaller. Please install manually:"
@@ -45,21 +56,16 @@ rm -rf build dist *.spec
 echo "✓ Cleaned build artifacts"
 echo ""
 
-# Prepare data folders
+# Prepare data folders (assets contains music, player, background)
 echo "[4/5] Preparing data folders..."
-DATA_ARGS="--add-data player:player --add-data save_data:save_data"
-echo "  - Including: player/ folder"
-echo "  - Including: save_data/ folder"
-
-# Add optional folders if they exist
-if [ -d "music" ]; then
-    DATA_ARGS="$DATA_ARGS --add-data music:music"
-    echo "  - Including: music/ folder"
+DATA_ARGS=""
+if [ -d "assets" ]; then
+    DATA_ARGS="--add-data assets:assets"
+    echo "  - Including: assets/ folder (music, player, background)"
 fi
-
-if [ -d "world_map" ]; then
-    DATA_ARGS="$DATA_ARGS --add-data world_map:world_map"
-    echo "  - Including: world_map/ folder"
+if [ -z "$DATA_ARGS" ]; then
+    echo "✗ Error: assets/ folder not found. Run from MilosStory project directory."
+    exit 1
 fi
 echo ""
 
@@ -68,11 +74,13 @@ echo "[5/5] Building executable (this may take a few minutes)..."
 echo "  Running PyInstaller..."
 echo ""
 
-# Use python -m PyInstaller to ensure we use the right installation
+# Use PyInstaller (python or python3)
 # For macOS, use onedir mode instead of onefile (onefile + windowed doesn't work well on Mac)
-python -m PyInstaller --name "MilosStory" \
+$PY_CMD -m PyInstaller --name "MilosStory" \
     --onedir \
     --windowed \
+    --hidden-import=src.paths \
+    --collect-submodules=jaraco \
     $DATA_ARGS \
     --clean \
     --noconfirm \

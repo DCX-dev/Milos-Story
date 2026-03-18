@@ -2,17 +2,17 @@ import json
 import os
 from datetime import datetime
 
+from .paths import get_data_path
+
 class SaveSystem:
     def __init__(self):
-        # Use normpath to handle paths with spaces and special characters
         try:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            self.save_folder = os.path.normpath(os.path.join(base_dir, "data", "save_data"))
+            data_path = get_data_path()
+            self.save_folder = os.path.normpath(os.path.join(data_path, "save_data"))
             os.makedirs(self.save_folder, exist_ok=True)
         except Exception:
-            # Fallback to current directory if there's an issue
-            base_dir = os.path.dirname(os.path.dirname(os.getcwd()))
-            self.save_folder = os.path.normpath(os.path.join(base_dir, "data", "save_data"))
+            data_path = os.path.join(os.path.expanduser("~"), "MilosStory_saves")
+            self.save_folder = os.path.normpath(os.path.join(data_path, "save_data"))
             os.makedirs(self.save_folder, exist_ok=True)
         self.max_slots = 3
     
@@ -24,12 +24,14 @@ class SaveSystem:
         """Get the full path to save file (alias for get_save_path)"""
         return self.get_save_path(slot)
     
-    def save_game(self, slot, level, player_x, player_y):
+    def save_game(self, slot, level, player_x, player_y, arrow_count=20, player_damage=1):
         """Save game data to a slot"""
         save_data = {
             "level": level,
             "player_x": player_x,
             "player_y": player_y,
+            "arrow_count": arrow_count,
+            "player_damage": player_damage,
             "timestamp": datetime.now().isoformat()
         }
         

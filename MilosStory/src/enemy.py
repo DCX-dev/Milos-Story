@@ -18,8 +18,9 @@ class Enemy:
         
         # Enemy state
         self.is_alive = True
-        self.max_health = 3
+        self.max_health = 8  # 8 hearts
         self.health = self.max_health
+        self.health_bar_timer = 0  # Show bar for 2 seconds after hit
         self.color = (200, 50, 50)  # Red stick figure
         self.facing_right = True
         
@@ -34,6 +35,8 @@ class Enemy:
         """Update enemy AI with proper physics"""
         if not self.is_alive:
             return
+        if self.health_bar_timer > 0:
+            self.health_bar_timer -= 1
         
         # Update jump cooldown
         if self.jump_cooldown > 0:
@@ -126,8 +129,9 @@ class Enemy:
             self.jump_cooldown = 30  # Cooldown between jumps
     
     def take_damage(self, amount=1):
-        """Take damage from rock"""
+        """Take damage from arrow"""
         self.health -= amount
+        self.health_bar_timer = 120  # Show health bar for ~2 seconds
         if self.health <= 0:
             self.health = 0
             self.is_alive = False
@@ -204,3 +208,20 @@ class Enemy:
                          (head_x - eye_offset, head_y - 2), eye_size - 1)
         pygame.draw.circle(screen, (0, 0, 0), 
                          (head_x + eye_offset, head_y - 2), eye_size - 1)
+        
+        # Health bar (8 hearts) - show when hit
+        if self.health_bar_timer > 0 and self.is_alive:
+            bar_width = 50
+            bar_height = 6
+            bar_x = screen_x + (self.width - bar_width) // 2
+            bar_y = screen_y - 12
+            # Background
+            pygame.draw.rect(screen, (80, 0, 0), (bar_x, bar_y, bar_width, bar_height))
+            # Health (8 segments = hearts)
+            heart_width = bar_width / 8
+            for i in range(8):
+                if i < self.health:
+                    seg_x = bar_x + i * heart_width + 1
+                    pygame.draw.rect(screen, (255, 50, 50), 
+                                   (seg_x, bar_y + 1, heart_width - 2, bar_height - 2))
+            pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 1)

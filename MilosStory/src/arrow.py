@@ -28,7 +28,8 @@ class Arrow:
             return
         self.x += self.vel_x
         self.y += self.vel_y
-        if self.x < -200 or self.x > 1400 or self.y < -200 or self.y > 1000:
+        # Wide bounds to match explorable levels (world can be 4000+ wide)
+        if self.x < -300 or self.x > 5500 or self.y < -300 or self.y > 1200:
             self.is_alive = False
     
     def get_rect(self):

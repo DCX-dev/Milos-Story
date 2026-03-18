@@ -1,0 +1,51 @@
+# Build Windows .exe on real Windows (no Wine - avoids manifest errors)
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:  # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Find project directory
+        id: project
+        shell: bash
+        run: |
+          if [ -f "main.py" ]; then
+            echo "dir=." >> $GITHUB_OUTPUT
+          elif [ -f "MilosStory/main.py" ]; then
+            echo "dir=MilosStory" >> $GITHUB_OUTPUT
+          else
+            echo "Could not find main.py"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          cd ${{ steps.project.outputs.dir }}
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows EXE
+        run: |
+          cd ${{ steps.project.outputs.dir }}
+          pyinstaller --name "MilosStory" --onefile --windowed --hidden-import=src.paths --add-data "assets;assets" --clean --noconfirm main.py
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MilosStory-Windows
+          path: ${{ steps.project.outputs.dir }}/dist/MilosStory.exe

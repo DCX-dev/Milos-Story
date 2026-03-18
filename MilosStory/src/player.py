@@ -41,11 +41,13 @@ class Player:
         """Load GIF animations from player folder"""
         # Use normpath to handle paths with spaces and special characters
         try:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            from .paths import get_base_path
+            base_dir = get_base_path()
             player_folder = os.path.normpath(os.path.join(base_dir, "assets", "player"))
         except Exception:
             # Fallback
-            base_dir = os.path.dirname(os.path.dirname(os.getcwd()))
+            from .paths import get_base_path
+            base_dir = get_base_path()
             player_folder = os.path.normpath(os.path.join(base_dir, "assets", "player"))
         
         animation_files = {
@@ -157,7 +159,7 @@ class Player:
     
     def shoot_arrow(self, target_x, target_y):
         # No cooldown - infinite arrows!
-        from arrow import Arrow
+        from src.arrow import Arrow
         sx = self.x + self.width // 2
         sy = self.y + self.height // 2
         dx = target_x - sx

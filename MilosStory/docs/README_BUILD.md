@@ -1,55 +1,71 @@
-# Building Executables - Quick Guide
+# Building Executables for Milo's Story
 
-## Understanding Python Versions
+## Mac Application (.app)
 
-**Important:** There are two different Python installations needed:
-
-1. **Mac Python** (what you have) - Used to run the game on Mac
-   - ✅ You already have this: Python 3.13.3
-   - Used for: Running `python main.py` on Mac
-
-2. **Windows Python in Wine** (what you need for Windows builds) - Used to build Windows executables
-   - ❌ You need to install this separately
-   - Used for: Building `.exe` files using PyInstaller in Wine
-
-## Building Mac Executable (Easy - Use Your Mac Python)
+From the **MilosStory** project directory:
 
 ```bash
-./build_mac.sh
+./scripts/build_mac.sh
 ```
 
-This uses your existing Mac Python - no extra setup needed!
+**Output:** `dist/MilosStory.app` — double-click to run or drag to Applications.
 
-## Building Windows Executable (Requires Windows Python in Wine)
+- First run: Right-click → Open (macOS Gatekeeper for unsigned apps)
+- Save files: `~/Library/Application Support/MilosStory/`
 
-You have two options:
+## Windows Executable (.exe)
 
-### Option 1: Install Windows Python in Wine (Complex)
+### Option A: GitHub Actions (recommended — always works)
 
-1. Download Windows Python installer: https://www.python.org/downloads/windows/
-2. Install it in Wine: `./install_python_wine.sh`
-3. Build: `./build_windows.sh`
+1. Push your project to GitHub
+2. Go to **Actions** tab → **Build Windows EXE** → **Run workflow**
+3. When done, download **MilosStory-Windows** from the workflow run
 
-**Note:** This can be unreliable and may not work perfectly.
+Uses real Windows in the cloud — no Wine, no manifest errors.
 
-### Option 2: Build on Windows Machine (Recommended)
+### Option B: On Windows (native)
 
-For best results, build on an actual Windows computer:
+```cmd
+scripts\build_windows.bat
+```
 
-1. Copy your project to a Windows machine
-2. Install Python from python.org
-3. Run:
+**Output:** `dist\MilosStory.exe`
+
+### Option C: Docker on Mac (alternative to Wine)
+
+```bash
+./scripts/build_windows_docker.sh
+```
+
+Uses `kivy/python-winpython` container — sometimes works when local Wine fails.
+
+### Option D: Wine + Desktop Python on Mac
+
+```bash
+./scripts/build_windows.sh
+```
+
+Uses `~/Desktop/python/python.exe`. May fail with manifest error — try Option A or C.
+
+### Option B: Install Python in Wine First
+
+1. Download Python for Windows (64-bit): https://www.python.org/downloads/windows/
+2. Run: `./scripts/install_python_wine.sh`
+3. During install: check **Add Python to PATH**
+4. Build: `./scripts/build_windows.sh`
+
+### Option C: Build on a Windows Machine
+
+1. Copy the project to Windows
+2. Install Python and run: `pip install -r requirements.txt pyinstaller`
+3. From the MilosStory folder:
    ```cmd
-   pip install -r requirements.txt
-   pip install pyinstaller
-   pyinstaller --name "MilosStory" --onefile --windowed --add-data "player;player" --add-data "save_data;save_data" main.py
+   pyinstaller --name "MilosStory" --onefile --windowed --add-data "assets;assets" --hidden-import=src.paths main.py
    ```
-
-### Option 3: Use GitHub Actions (Free CI/CD)
-
-Create a `.github/workflows/build.yml` file to automatically build Windows executables in the cloud.
 
 ## Summary
 
-- **Mac build**: ✅ Ready to go - just run `./build_mac.sh`
-- **Windows build**: Requires Windows Python in Wine OR build on Windows machine
+| Platform | Command | Output |
+|----------|---------|--------|
+| Mac | `./scripts/build_mac.sh` | `dist/MilosStory.app` |
+| Windows (Wine) | `./scripts/build_windows.sh` | `dist/MilosStory.exe` |

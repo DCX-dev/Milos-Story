@@ -49,8 +49,8 @@ class CreditsScreen:
         level1_rect = level1_label.get_rect(center=(self.screen.get_width() // 2, 310))
         self.screen.blit(level1_label, level1_rect)
         
-        # Level 1: "Music by Viacheslav Starostin"
-        line1_text = credit_font.render("Music by Viacheslav Starostin", True, (180, 180, 180))
+        # Level 1: "Music by viacheslavstarostin" (from pixabay.com/users/viacheslavstarostin-50153119)
+        line1_text = credit_font.render("Music by viacheslavstarostin", True, (180, 180, 180))
         line1_rect = line1_text.get_rect(center=(self.screen.get_width() // 2, 335))
         self.screen.blit(line1_text, line1_rect)
         
@@ -69,8 +69,8 @@ class CreditsScreen:
         level2_rect = level2_label.get_rect(center=(self.screen.get_width() // 2, 415))
         self.screen.blit(level2_label, level2_rect)
         
-        # Level 2: "Music by HitsLab"
-        level2_line1 = credit_font.render("Music by HitsLab", True, (180, 180, 180))
+        # Level 2: "Music by hitslab" (from pixabay.com/users/hitslab-47305729)
+        level2_line1 = credit_font.render("Music by hitslab", True, (180, 180, 180))
         level2_line1_rect = level2_line1.get_rect(center=(self.screen.get_width() // 2, 440))
         self.screen.blit(level2_line1, level2_line1_rect)
         
@@ -89,8 +89,8 @@ class CreditsScreen:
         level3_rect = level3_label.get_rect(center=(self.screen.get_width() // 2, 520))
         self.screen.blit(level3_label, level3_rect)
         
-        # Level 3: "Music by Mykola Sosin"
-        level3_line1 = credit_font.render("Music by Mykola Sosin", True, (180, 180, 180))
+        # Level 3: "Music by tatamusic" (from pixabay.com/users/tatamusic-51344851)
+        level3_line1 = credit_font.render("Music by tatamusic", True, (180, 180, 180))
         level3_line1_rect = level3_line1.get_rect(center=(self.screen.get_width() // 2, 545))
         self.screen.blit(level3_line1, level3_line1_rect)
         
@@ -104,13 +104,13 @@ class CreditsScreen:
         level3_attr_rect = level3_attr_text.get_rect(center=(self.screen.get_width() // 2, 595))
         self.screen.blit(level3_attr_text, level3_attr_rect)
         
-        # Levels 4-10 Music Credits
-        level4_10_label = attr_font.render("Levels 4-10:", True, (160, 160, 160))
+        # Theme + Levels 4-10 Music Credits (same artist)
+        level4_10_label = attr_font.render("Theme + Levels 4-10:", True, (160, 160, 160))
         level4_10_rect = level4_10_label.get_rect(center=(self.screen.get_width() // 2, 625))
         self.screen.blit(level4_10_label, level4_10_rect)
         
-        # Levels 4-10: "Music by Maksym Malko"
-        level4_10_line1 = credit_font.render("Music by Maksym Malko", True, (180, 180, 180))
+        # Theme + Levels 4-10: "Music by backgroundmusicforvideos" (from pixabay.com/users/backgroundmusicforvideos-46459014)
+        level4_10_line1 = credit_font.render("Music by backgroundmusicforvideos", True, (180, 180, 180))
         level4_10_line1_rect = level4_10_line1.get_rect(center=(self.screen.get_width() // 2, 650))
         self.screen.blit(level4_10_line1, level4_10_line1_rect)
         
