@@ -29,12 +29,14 @@ class Player:
         # Animation state
         self.current_state = "standing"  # "standing", "walking", "falling"
         self.animation_frame = 0
-        self.animation_timer = 0.0  # Use float for frame duration timing
+        self.animation_timer = pygame.time.get_ticks()  # Time when we last advanced frame
         self.facing_right = True  # Direction player is facing
         
-        # Load animations (stores both frames and durations)
-        self.animations = {}  # {state: [frames]}
-        self.animation_durations = {}  # {state: [durations_in_ms]}
+        # Normal-speed frame durations (ms) - consistent playback per state
+        self.frame_duration_ms = {"standing": 150, "walking": 100, "falling": 80}
+        
+        # Load animations
+        self.animations = {}
         self.load_animations()
         
     def load_animations(self):
@@ -60,19 +62,16 @@ class Player:
             try:
                 filepath = os.path.normpath(os.path.join(player_folder, filename))
                 if os.path.exists(filepath):
-                    frames, durations = self.load_gif_frames(filepath)
+                    frames, _ = self.load_gif_frames(filepath)
                     self.animations[state] = frames
-                    self.animation_durations[state] = durations
                 else:
                     # Fallback: create a simple colored rectangle if GIF doesn't exist
                     print(f"Warning: {filename} not found in player folder. Using fallback.")
                     self.animations[state] = [self.create_fallback_surface()]
-                    self.animation_durations[state] = [100]  # Default 100ms duration
             except Exception as e:
                 # Fallback on any error
                 print(f"Error loading {filename}: {e}. Using fallback.")
                 self.animations[state] = [self.create_fallback_surface()]
-                self.animation_durations[state] = [100]  # Default 100ms duration
         
         # Set default size from first animation if available
         if self.animations.get("standing"):
@@ -313,27 +312,17 @@ class Player:
         if new_state != self.current_state:
             self.current_state = new_state
             self.animation_frame = 0
-            self.animation_timer = 0.0
+            self.animation_timer = pygame.time.get_ticks()
         
-        # Update animation frame using GIF frame durations
+        # Update animation frame - use time-based duration for consistent speed
         if self.current_state in self.animations:
             frames = self.animations[self.current_state]
-            durations = self.animation_durations.get(self.current_state, [100])
-            
             if len(frames) > 1:
-                # Get duration for current frame (in milliseconds)
-                current_duration = durations[self.animation_frame % len(durations)]
-                # Convert to game frames (assuming 60 FPS: 1000ms / 60 = ~16.67ms per frame)
-                frames_per_ms = 60.0 / 1000.0
-                duration_in_frames = current_duration * frames_per_ms
-                
-                # Update timer (increment by 1 frame per update call)
-                self.animation_timer += 1.0
-                
-                # Advance to next frame when duration is reached
-                if self.animation_timer >= duration_in_frames:
+                duration_ms = self.frame_duration_ms.get(self.current_state, 100)
+                now = pygame.time.get_ticks()
+                if now - self.animation_timer >= duration_ms:
                     self.animation_frame = (self.animation_frame + 1) % len(frames)
-                    self.animation_timer = 0.0
+                    self.animation_timer = now
     
     def draw(self, screen, camera_x, camera_y):
         # Draw player relative to camera
