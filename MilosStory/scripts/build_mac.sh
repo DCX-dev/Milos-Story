@@ -28,7 +28,12 @@ PY_CMD="python"
 if ! command -v python &> /dev/null && command -v python3 &> /dev/null; then
     PY_CMD="python3"
 fi
-echo "[2/5] Checking PyInstaller installation..."
+echo "[2/5] Checking PyInstaller and jaraco.text..."
+# jaraco.text is required by pkg_resources (used by pygame) - must be installed for PyInstaller
+if ! $PY_CMD -m pip show jaraco.text &> /dev/null; then
+    echo "  Installing jaraco.text (required for pkg_resources)..."
+    $PY_CMD -m pip install --quiet jaraco.text
+fi
 if ! $PY_CMD -m pip show pyinstaller &> /dev/null; then
     echo "  Installing PyInstaller..."
     $PY_CMD -m pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org pyinstaller
@@ -80,6 +85,7 @@ $PY_CMD -m PyInstaller --name "MilosStory" \
     --onedir \
     --windowed \
     --hidden-import=src.paths \
+    --hidden-import=jaraco.text \
     --collect-submodules=jaraco \
     $DATA_ARGS \
     --clean \
@@ -97,10 +103,12 @@ if [ $BUILD_EXIT_CODE -eq 0 ]; then
     if [ -d "dist/MilosStory.app" ]; then
         echo "[6/6] Post-processing app bundle..."
         
-        # Remove macOS metadata files (._* files) that can cause signing issues
+        # Remove macOS metadata files (._* files) that can cause signing/launch issues
         echo "  Removing macOS metadata files..."
         find dist/MilosStory.app -name "._*" -type f -delete 2>/dev/null
-        find dist/MilosStory.app -name "._*" -type d -exec rm -rf {} + 2>/dev/null
+        find dist/MilosStory.app -name "._*" -type d -delete 2>/dev/null
+        # Also remove from MacOS folder (critical - ._MilosStory can break launch)
+        rm -f dist/MilosStory.app/Contents/MacOS/._* 2>/dev/null
         
         # Remove quarantine attribute if it exists
         echo "  Removing quarantine attribute..."

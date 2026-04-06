@@ -21,7 +21,17 @@ from src.enemy import Enemy
 from screens.level_selector import LevelSelector
 from src.arrow import Arrow
 
-# Initialize Pygame
+# Windows high-DPI: without this, the window can be huge and hard to close.
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # per-monitor
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 pygame.init()
 pygame.mixer.init()  # Initialize mixer for music
 

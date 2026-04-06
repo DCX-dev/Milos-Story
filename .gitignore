@@ -37,6 +37,7 @@ env/
 
 # Game-specific
 data/save_data/*.json
+**/data/save_data/*.json
 **/data/options.json
 !data/save_data/.gitkeep
 
