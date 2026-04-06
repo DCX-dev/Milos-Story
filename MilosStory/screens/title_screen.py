@@ -59,6 +59,10 @@ class TitleScreen:
         except Exception as e:
             print(f"Error loading background: {e}")
         return None
+    
+    def refresh_for_screen(self):
+        """Rescale background after window resize or fullscreen change."""
+        self.background_image = self._load_background()
         
     def draw(self):
         """Draw the title screen"""
@@ -92,69 +96,59 @@ class TitleScreen:
         self.screen.blit(subtitle_text, subtitle_rect)
         
         if not self.showing_slot_selection:
-            # Play button
-            play_font = pygame.font.Font(None, 48)
+            h = self.screen.get_height()
+            cy = self.screen.get_width() // 2
+            # Compact menu buttons (font + padding)
+            btn_font_sz = 34
+            pad_x, pad_y = 22, 9
+            br = 7
+            y0 = max(300, int(h * 0.38))
+            gap = 46
+
+            play_font = pygame.font.Font(None, btn_font_sz)
             play_text = play_font.render("Click to Play", True, (255, 255, 255))
-            play_rect = play_text.get_rect(center=(self.screen.get_width() // 2, 400))
-            
-            # Button background
-            self.play_button_rect = play_rect.inflate(40, 20)
-            # Check if mouse is hovering
+            play_rect = play_text.get_rect(center=(cy, y0))
+            self.play_button_rect = play_rect.inflate(pad_x, pad_y)
             mouse_pos = pygame.mouse.get_pos()
             is_hover = self.play_button_rect.collidepoint(mouse_pos)
             button_color = (120, 170, 255) if is_hover else (100, 150, 255)
-            
-            pygame.draw.rect(self.screen, button_color, self.play_button_rect, border_radius=10)
-            pygame.draw.rect(self.screen, (255, 255, 255), self.play_button_rect, width=3, border_radius=10)
+            pygame.draw.rect(self.screen, button_color, self.play_button_rect, border_radius=br)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.play_button_rect, width=2, border_radius=br)
             self.screen.blit(play_text, play_rect)
-            
-            # Credits button
-            credits_font = pygame.font.Font(None, 48)
+
+            credits_font = pygame.font.Font(None, btn_font_sz)
             credits_text = credits_font.render("Credits", True, (255, 255, 255))
-            credits_rect = credits_text.get_rect(center=(self.screen.get_width() // 2, 460))
-            
-            # Button background
-            self.credits_button_rect = credits_rect.inflate(40, 20)
-            # Check if mouse is hovering
+            credits_rect = credits_text.get_rect(center=(cy, y0 + gap))
+            self.credits_button_rect = credits_rect.inflate(pad_x, pad_y)
             is_credits_hover = self.credits_button_rect.collidepoint(mouse_pos)
             credits_button_color = (150, 120, 200) if is_credits_hover else (130, 100, 180)
-            
-            pygame.draw.rect(self.screen, credits_button_color, self.credits_button_rect, border_radius=10)
-            pygame.draw.rect(self.screen, (255, 255, 255), self.credits_button_rect, width=3, border_radius=10)
+            pygame.draw.rect(self.screen, credits_button_color, self.credits_button_rect, border_radius=br)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.credits_button_rect, width=2, border_radius=br)
             self.screen.blit(credits_text, credits_rect)
-            
-            # Options button
-            options_font = pygame.font.Font(None, 48)
+
+            options_font = pygame.font.Font(None, btn_font_sz)
             options_text = options_font.render("Options", True, (255, 255, 255))
-            options_rect = options_text.get_rect(center=(self.screen.get_width() // 2, 540))
-            
-            self.options_button_rect = options_rect.inflate(40, 20)
+            options_rect = options_text.get_rect(center=(cy, y0 + gap * 2))
+            self.options_button_rect = options_rect.inflate(pad_x, pad_y)
             is_options_hover = self.options_button_rect.collidepoint(mouse_pos)
             options_button_color = (120, 150, 100) if is_options_hover else (100, 130, 80)
-            
-            pygame.draw.rect(self.screen, options_button_color, self.options_button_rect, border_radius=10)
-            pygame.draw.rect(self.screen, (255, 255, 255), self.options_button_rect, width=3, border_radius=10)
+            pygame.draw.rect(self.screen, options_button_color, self.options_button_rect, border_radius=br)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.options_button_rect, width=2, border_radius=br)
             self.screen.blit(options_text, options_rect)
-            
-            # Quit button
-            quit_font = pygame.font.Font(None, 48)
+
+            quit_font = pygame.font.Font(None, btn_font_sz)
             quit_text = quit_font.render("Quit", True, (255, 255, 255))
-            quit_rect = quit_text.get_rect(center=(self.screen.get_width() // 2, 620))
-            
-            # Button background
-            self.quit_button_rect = quit_rect.inflate(40, 20)
-            # Check if mouse is hovering
+            quit_rect = quit_text.get_rect(center=(cy, y0 + gap * 3))
+            self.quit_button_rect = quit_rect.inflate(pad_x, pad_y)
             is_quit_hover = self.quit_button_rect.collidepoint(mouse_pos)
             quit_button_color = (200, 80, 80) if is_quit_hover else (180, 60, 60)
-            
-            pygame.draw.rect(self.screen, quit_button_color, self.quit_button_rect, border_radius=10)
-            pygame.draw.rect(self.screen, (255, 255, 255), self.quit_button_rect, width=3, border_radius=10)
+            pygame.draw.rect(self.screen, quit_button_color, self.quit_button_rect, border_radius=br)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.quit_button_rect, width=2, border_radius=br)
             self.screen.blit(quit_text, quit_rect)
-            
-            # Instructions
-            inst_font = pygame.font.Font(None, 24)
+
+            inst_font = pygame.font.Font(None, 22)
             inst_text = inst_font.render("Select a save file to continue your adventure", True, (200, 200, 200))
-            inst_rect = inst_text.get_rect(center=(self.screen.get_width() // 2, 700))
+            inst_rect = inst_text.get_rect(center=(cy, min(h - 24, y0 + gap * 3 + 52)))
             self.screen.blit(inst_text, inst_rect)
         else:
             # Show save slot selection
@@ -169,12 +163,12 @@ class TitleScreen:
         title_rect = title_text.get_rect(center=(self.screen.get_width() // 2, 100))
         self.screen.blit(title_text, title_rect)
         
-        # Draw 3 save slots
-        slot_width = 300
-        slot_height = 150
-        slot_spacing = 50
+        # Draw 3 save slots (compact for smaller windows)
+        slot_width = 210
+        slot_height = 108
+        slot_spacing = 28
         start_x = (self.screen.get_width() - (3 * slot_width + 2 * slot_spacing)) // 2
-        start_y = 250
+        start_y = max(200, min(250, self.screen.get_height() // 3))
         
         for i in range(3):
             slot_x = start_x + i * (slot_width + slot_spacing)
@@ -194,7 +188,7 @@ class TitleScreen:
             # Slot name (Milo A, Milo B, Milo C)
             slot_name = self.slot_names[i]
             slot_num_text = slot_font.render(slot_name, True, (255, 255, 255))
-            slot_num_rect = slot_num_text.get_rect(center=(slot_x + slot_width // 2, slot_y + 30))
+            slot_num_rect = slot_num_text.get_rect(center=(slot_x + slot_width // 2, slot_y + 22))
             self.screen.blit(slot_num_text, slot_num_rect)
             
             # Save info
@@ -203,7 +197,7 @@ class TitleScreen:
             
             if save_info["exists"]:
                 level_text = info_font.render(f"Level: {save_info['level']}", True, (200, 255, 200))
-                level_rect = level_text.get_rect(center=(slot_x + slot_width // 2, slot_y + 70))
+                level_rect = level_text.get_rect(center=(slot_x + slot_width // 2, slot_y + 52))
                 self.screen.blit(level_text, level_rect)
                 
                 # Format timestamp
@@ -212,13 +206,13 @@ class TitleScreen:
                         dt = datetime.fromisoformat(save_info["timestamp"])
                         time_str = dt.strftime("%m/%d %H:%M")
                         time_text = info_font.render(time_str, True, (180, 180, 180))
-                        time_rect = time_text.get_rect(center=(slot_x + slot_width // 2, slot_y + 100))
+                        time_rect = time_text.get_rect(center=(slot_x + slot_width // 2, slot_y + 76))
                         self.screen.blit(time_text, time_rect)
                     except:
                         pass
             else:
                 empty_text = info_font.render("Empty Slot", True, (150, 150, 150))
-                empty_rect = empty_text.get_rect(center=(slot_x + slot_width // 2, slot_y + 70))
+                empty_rect = empty_text.get_rect(center=(slot_x + slot_width // 2, slot_y + 52))
                 self.screen.blit(empty_text, empty_rect)
         
         # Store slot rects for mouse clicks and handle hover
@@ -245,15 +239,15 @@ class TitleScreen:
             
             # Show delete button when hovering over non-empty file
             if is_hovered and save_info["exists"]:
-                delete_button_width = 80
-                delete_button_height = 30
+                delete_button_width = 64
+                delete_button_height = 24
                 delete_x = slot_x + (slot_width - delete_button_width) // 2
                 delete_y = slot_y + slot_height - delete_button_height - 10
                 delete_rect = pygame.Rect(delete_x, delete_y, delete_button_width, delete_button_height)
                 self.delete_button_rects.append((i, delete_rect))
                 
                 # Draw delete button
-                delete_font = pygame.font.Font(None, 20)
+                delete_font = pygame.font.Font(None, 18)
                 delete_text = delete_font.render("Delete", True, (255, 255, 255))
                 pygame.draw.rect(self.screen, (200, 50, 50), delete_rect, border_radius=5)
                 pygame.draw.rect(self.screen, (255, 255, 255), delete_rect, width=1, border_radius=5)

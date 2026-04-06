@@ -30,6 +30,7 @@ class Enemy:
         self.patrol_left = x
         self.patrol_right = x + self.patrol_distance
         self.jump_cooldown = 0
+        self.screen_height = 640  # set from Game.load_level to match viewport
         
     def update(self, platforms, player_x=None, player_y=None):
         """Update enemy AI with proper physics"""
@@ -111,8 +112,8 @@ class Enemy:
                         self.jump()
         
         # Prevent falling through bottom of screen
-        if self.y > 800 - self.height:
-            self.y = 800 - self.height
+        if self.y > self.screen_height - self.height:
+            self.y = self.screen_height - self.height
             self.vel_y = 0
             self.on_ground = True
         

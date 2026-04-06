@@ -5,12 +5,10 @@ class VictoryScreen:
     def __init__(self, screen):
         self.screen = screen
         self.timer = 0
-        # Initialize OK button rect
-        button_width = 150
-        button_height = 50
-        button_x = screen.get_width() // 2 - button_width // 2
-        button_y = 550
-        self.ok_button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
+        bw, bh = 118, 38
+        button_x = screen.get_width() // 2 - bw // 2
+        button_y = max(420, screen.get_height() - 52)
+        self.ok_button_rect = pygame.Rect(button_x, button_y, bw, bh)
         
     def draw(self):
         """Draw victory screen"""
@@ -67,11 +65,10 @@ class VictoryScreen:
         download_rect = download_text.get_rect(center=(self.screen.get_width() // 2, 490))
         self.screen.blit(download_text, download_rect)
         
-        # OK button (update position in case screen size changed)
-        button_width = 150
-        button_height = 50
+        button_width = 118
+        button_height = 38
         button_x = self.screen.get_width() // 2 - button_width // 2
-        button_y = 550
+        button_y = max(420, self.screen.get_height() - 52)
         self.ok_button_rect.x = button_x
         self.ok_button_rect.y = button_y
         self.ok_button_rect.width = button_width
@@ -87,7 +84,7 @@ class VictoryScreen:
         pygame.draw.rect(self.screen, button_color, self.ok_button_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), self.ok_button_rect, 2)
         
-        ok_font = pygame.font.Font(None, 40)
+        ok_font = pygame.font.Font(None, 30)
         ok_text = ok_font.render("OK", True, (255, 255, 255))
         ok_text_rect = ok_text.get_rect(center=self.ok_button_rect.center)
         self.screen.blit(ok_text, ok_text_rect)

@@ -4,9 +4,10 @@ import math
 from PIL import Image
 
 class Player:
-    def __init__(self, x, y, speed, gravity, jump_strength):
+    def __init__(self, x, y, speed, gravity, jump_strength, screen_height=640):
         self.x = x
         self.y = y
+        self.screen_height = screen_height
         self.width = 40
         self.height = 50
         self.speed = speed
@@ -292,9 +293,9 @@ class Player:
                     player_bottom = self.y + self.height
                     break
         
-        # Prevent falling through bottom of screen
-        if self.y > 800 - self.height:
-            self.y = 800 - self.height
+        # Prevent falling through bottom of screen (world y matches level layout)
+        if self.y > self.screen_height - self.height:
+            self.y = self.screen_height - self.height
             self.vel_y = 0
             self.on_ground = True
         

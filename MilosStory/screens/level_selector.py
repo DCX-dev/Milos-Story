@@ -16,12 +16,11 @@ class LevelSelector:
         title_rect = title_text.get_rect(center=(self.screen.get_width() // 2, 100))
         self.screen.blit(title_text, title_rect)
         
-        # Draw level buttons (1-10)
-        button_width = 150
-        button_height = 80
-        button_spacing = 20
+        button_width = 100
+        button_height = 54
+        button_spacing = 12
         start_x = (self.screen.get_width() - (5 * button_width + 4 * button_spacing)) // 2
-        start_y = 250
+        start_y = max(160, self.screen.get_height() // 5)
         
         self.level_buttons = []
         for i in range(10):
@@ -45,11 +44,11 @@ class LevelSelector:
             if is_hover and not is_selected:
                 button_color = hover_color
             
-            pygame.draw.rect(self.screen, button_color, button_rect, border_radius=10)
-            pygame.draw.rect(self.screen, (255, 255, 255), button_rect, width=3 if is_selected else 2, border_radius=10)
+            pygame.draw.rect(self.screen, button_color, button_rect, border_radius=8)
+            pygame.draw.rect(self.screen, (255, 255, 255), button_rect, width=2 if is_selected else 1, border_radius=8)
             
             # Level number
-            level_font = pygame.font.Font(None, 48)
+            level_font = pygame.font.Font(None, 34)
             level_text = level_font.render(str(level_num), True, (255, 255, 255))
             level_rect = level_text.get_rect(center=(button_x + button_width // 2, button_y + button_height // 2))
             self.screen.blit(level_text, level_rect)
@@ -58,13 +57,13 @@ class LevelSelector:
             if level_num == 10:
                 boss_font = pygame.font.Font(None, 20)
                 boss_text = boss_font.render("BOSS", True, (255, 100, 100))
-                boss_rect = boss_text.get_rect(center=(button_x + button_width // 2, button_y + button_height - 15))
+                boss_rect = boss_text.get_rect(center=(button_x + button_width // 2, button_y + button_height - 10))
                 self.screen.blit(boss_text, boss_rect)
         
         # Instructions
         inst_font = pygame.font.Font(None, 28)
         inst_text = inst_font.render("Click a level or press 1-0 to select | ENTER/Click to start | ESC to cancel", True, (200, 200, 200))
-        inst_rect = inst_text.get_rect(center=(self.screen.get_width() // 2, 600))
+        inst_rect = inst_text.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() - 36))
         self.screen.blit(inst_text, inst_rect)
     
     def handle_event(self, event):

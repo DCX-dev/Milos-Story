@@ -3,12 +3,10 @@ import pygame
 class CreditsScreen:
     def __init__(self, screen):
         self.screen = screen
-        # Initialize Back button rect
-        button_width = 150
-        button_height = 50
-        button_x = screen.get_width() // 2 - button_width // 2
-        button_y = 750
-        self.back_button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
+        bw, bh = 118, 38
+        button_x = screen.get_width() // 2 - bw // 2
+        button_y = max(400, screen.get_height() - 48)
+        self.back_button_rect = pygame.Rect(button_x, button_y, bw, bh)
         
     def draw(self):
         """Draw credits screen"""
@@ -129,11 +127,10 @@ class CreditsScreen:
         license_rect = license_text.get_rect(center=(self.screen.get_width() // 2, 725))
         self.screen.blit(license_text, license_rect)
         
-        # Back button
-        button_width = 150
-        button_height = 50
+        button_width = 118
+        button_height = 38
         button_x = self.screen.get_width() // 2 - button_width // 2
-        button_y = 750
+        button_y = max(400, self.screen.get_height() - 48)
         self.back_button_rect.x = button_x
         self.back_button_rect.y = button_y
         self.back_button_rect.width = button_width
@@ -149,7 +146,7 @@ class CreditsScreen:
         pygame.draw.rect(self.screen, button_color, self.back_button_rect)
         pygame.draw.rect(self.screen, (255, 255, 255), self.back_button_rect, 2)
         
-        back_font = pygame.font.Font(None, 40)
+        back_font = pygame.font.Font(None, 30)
         back_text = back_font.render("Back", True, (255, 255, 255))
         back_text_rect = back_text.get_rect(center=self.back_button_rect.center)
         self.screen.blit(back_text, back_text_rect)

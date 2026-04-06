@@ -2,6 +2,10 @@ import pygame
 import sys
 import os
 
+# macOS: allow native fullscreen (green button / Spaces behavior)
+if sys.platform == "darwin":
+    os.environ.setdefault("SDL_VIDEO_MAC_FULLSCREEN_SPACES", "1")
+
 # Add project root to path for imports
 from src.paths import get_base_path
 project_root = get_base_path()
@@ -15,7 +19,7 @@ from src.level_system import create_level, get_level_background
 from src.boss import Boss
 from screens.victory_screen import VictoryScreen
 from screens.credits_screen import CreditsScreen
-from screens.options_screen import OptionsScreen, load_volume
+from screens.options_screen import OptionsScreen, load_options, save_options
 from src.save_system import SaveSystem
 from src.enemy import Enemy
 from screens.level_selector import LevelSelector
@@ -35,14 +39,39 @@ if sys.platform == "win32":
 pygame.init()
 pygame.mixer.init()  # Initialize mixer for music
 
+
+def _compute_window_size():
+    """Default window (3:2), scaled down to fit any desktop with margins."""
+    base_w, base_h = 800, 534
+    margin_w, margin_h = 64, 120
+    dw, dh = 1280, 720
+    if hasattr(pygame.display, "get_desktop_sizes"):
+        sizes = pygame.display.get_desktop_sizes()
+        if sizes:
+            dw, dh = sizes[0][0], sizes[0][1]
+    else:
+        info = pygame.display.Info()
+        if info.current_w and info.current_h:
+            dw, dh = info.current_w, info.current_h
+    avail_w = max(320, dw - margin_w)
+    avail_h = max(240, dh - margin_h)
+    scale = min(1.0, avail_w / base_w, avail_h / base_h)
+    w = int(base_w * scale)
+    h = int(base_h * scale)
+    w = max(320, min(w, avail_w))
+    h = max(240, min(h, avail_h))
+    w -= w % 2
+    h -= h % 2
+    return w, h
+
+
 # ========== DEBUG MODE ==========
 # Set to True to enable level selector for testing
 DEBUG_MODE = False
 # =================================
 
-# Constants
-SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 800
+# Set for real in Game.__init__ (_setup_display); placeholders for import safety
+SCREEN_WIDTH, SCREEN_HEIGHT = 800, 534
 FPS = 60
 GRAVITY = 0.7
 JUMP_STRENGTH = -20
@@ -59,11 +88,12 @@ RED = (255, 100, 100)
 
 class Game:
     def __init__(self):
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Milo's Story - Platformer")
         self.clock = pygame.time.Clock()
         self.running = True
-        
+        opts = load_options()
+        self.fullscreen = bool(opts.get("fullscreen", False))
+        self._setup_display()
+
         # Game state
         self.state = "title"  # "title", "level_select", "playing", "victory", "credits", "options"
         self.current_level = 1
@@ -75,7 +105,7 @@ class Game:
         self.victory_screen = VictoryScreen(self.screen)
         self.level_selector = LevelSelector(self.screen)
         self.credits_screen = CreditsScreen(self.screen)
-        self.options_screen = OptionsScreen(self.screen)
+        self.options_screen = OptionsScreen(self.screen, game=self)
         
         # Level start position (for respawning)
         self.level_start_x = 100
@@ -113,6 +143,73 @@ class Game:
         # Music system
         self.current_music = None  # Track currently playing music file
         self.music_folder = "assets/music"
+    
+    def _setup_display(self):
+        global SCREEN_WIDTH, SCREEN_HEIGHT
+        flags = pygame.DOUBLEBUF
+        if self.fullscreen:
+            self.screen = pygame.display.set_mode((0, 0), flags | pygame.FULLSCREEN)
+            SCREEN_WIDTH, SCREEN_HEIGHT = self.screen.get_size()
+        else:
+            SCREEN_WIDTH, SCREEN_HEIGHT = _compute_window_size()
+            self.screen = pygame.display.set_mode(
+                (SCREEN_WIDTH, SCREEN_HEIGHT),
+                flags | pygame.RESIZABLE,
+            )
+        pygame.display.set_caption("Milo's Story - Platformer")
+    
+    def _sync_all_screens(self):
+        self.title_screen.screen = self.screen
+        self.title_screen.refresh_for_screen()
+        self.victory_screen.screen = self.screen
+        self.level_selector.screen = self.screen
+        self.credits_screen.screen = self.screen
+        self.options_screen.screen = self.screen
+        self.options_screen.relayout()
+    
+    def _set_fullscreen(self, enabled: bool):
+        global SCREEN_WIDTH, SCREEN_HEIGHT
+        enabled = bool(enabled)
+        if enabled == self.fullscreen:
+            return
+        playing = self.state == "playing" and self.player is not None
+        px = py = cl = None
+        ar = pd = None
+        if playing:
+            px, py, cl = self.player.x, self.player.y, self.current_level
+            ar, pd = self.arrow_count, self.player_damage
+        self.fullscreen = enabled
+        save_options(fullscreen=enabled)
+        self._setup_display()
+        self._sync_all_screens()
+        if playing and cl is not None and px is not None:
+            self.arrow_count = ar
+            self.player_damage = pd
+            self.load_level(cl, int(px), int(py))
+    
+    def _apply_window_size(self, w, h):
+        global SCREEN_WIDTH, SCREEN_HEIGHT
+        if self.fullscreen:
+            return
+        w = max(320, min(int(w), 7680))
+        h = max(240, min(int(h), 4320))
+        if w == SCREEN_WIDTH and h == SCREEN_HEIGHT:
+            return
+        playing = self.state == "playing" and self.player is not None
+        px = py = cl = None
+        ar = pd = None
+        if playing:
+            px, py, cl = self.player.x, self.player.y, self.current_level
+            ar, pd = self.arrow_count, self.player_damage
+        self.screen = pygame.display.set_mode((w, h), pygame.RESIZABLE | pygame.DOUBLEBUF)
+        SCREEN_WIDTH, SCREEN_HEIGHT = w, h
+        self.world_width = SCREEN_WIDTH
+        self.world_height = SCREEN_HEIGHT
+        self._sync_all_screens()
+        if playing and cl is not None and px is not None:
+            self.arrow_count = ar
+            self.player_damage = pd
+            self.load_level(cl, int(px), int(py))
     
     def _find_music_file(self, level_num):
         """Find music file for a level. Looks for level1, level2, etc. in any format."""
@@ -166,7 +263,7 @@ class Game:
     
     def _apply_music_volume(self):
         """Apply current volume from options to mixer"""
-        vol = load_volume() / 100.0
+        vol = load_options()["volume"] / 100.0
         pygame.mixer.music.set_volume(vol)
     
     def _play_theme_music(self):
@@ -256,7 +353,10 @@ class Game:
         self.level_start_y = player_y
         
         # Create player
-        self.player = Player(player_x, player_y, PLAYER_SPEED, GRAVITY, JUMP_STRENGTH)
+        self.player = Player(
+            player_x, player_y, PLAYER_SPEED, GRAVITY, JUMP_STRENGTH,
+            screen_height=SCREEN_HEIGHT,
+        )
         
         # Reset player health
         self.player_health = self.max_health
@@ -267,6 +367,8 @@ class Game:
         # Create platforms, enemies, lava, and chests for level
         self.platforms, self.enemies, self.lava_zones, self.world_width, self.chests = create_level(
             level_num, SCREEN_HEIGHT, SCREEN_WIDTH)
+        for enemy in self.enemies:
+            enemy.screen_height = SCREEN_HEIGHT
         
         # Create boss for level 10
         self.boss = None
@@ -310,6 +412,27 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
                 return
+            
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                self._set_fullscreen(not self.fullscreen)
+                continue
+            
+            if not self.fullscreen:
+                if event.type == pygame.VIDEORESIZE:
+                    self._apply_window_size(event.w, event.h)
+                    continue
+                if hasattr(pygame, "WINDOWEVENT") and event.type == pygame.WINDOWEVENT:
+                    sub = event.event
+                    resized = getattr(pygame, "WINDOWEVENT_RESIZED", None)
+                    size_changed = getattr(pygame, "WINDOWEVENT_SIZE_CHANGED", None)
+                    resize_codes = {c for c in (resized, size_changed) if c is not None}
+                    if resize_codes and sub in resize_codes:
+                        try:
+                            nw, nh = pygame.display.get_window_size()
+                            self._apply_window_size(nw, nh)
+                        except (pygame.error, AttributeError):
+                            pass
+                        continue
             
             if self.state == "title":
                 result = self.title_screen.handle_event(event)
@@ -661,7 +784,7 @@ class Game:
                 "Space / Up: Jump",
                 "X / F / Click: Shoot Arrow (aims at mouse)",
                 "Chests: +14 arrows or +1 damage (walk near to collect)",
-                "6: Toggle Aiming Line | ESC: Save & Quit"
+                "6: Toggle Aiming Line | F11: Fullscreen | ESC: Save & Quit"
             ]
             # Draw semi-transparent background for instructions
             instruction_bg_height = len(instructions) * 25 + 10
