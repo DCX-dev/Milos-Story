@@ -10,32 +10,27 @@ This guide explains how to build Mac and Windows executables for the game.
 
 ## Mac Build
 
-### Option 1: Using the build script (Recommended)
+From the **`MilosStory`** project folder (where `main.py` and `MilosStory.spec` live):
+
+### Option 1: Build script (recommended — produces `MilosStory.app`)
 
 ```bash
-chmod +x build_mac.sh
-./build_mac.sh
+chmod +x scripts/build_mac.sh
+./scripts/build_mac.sh
 ```
 
-The executable will be created in the `dist` folder as `MilosStory`.
+Output: **`dist/MilosStory.app`**. Double-click it or run `open dist/MilosStory.app`.
 
-### Option 2: Manual build
+The script installs PyInstaller if needed, bundles `assets/`, ad-hoc signs the app, and strips quarantine metadata when possible.
+
+### Option 2: PyInstaller spec only
 
 ```bash
-# Install PyInstaller
 pip install pyinstaller
-
-# Build executable
-pyinstaller --name "MilosStory" \
-    --onefile \
-    --windowed \
-    --add-data "player:player" \
-    --add-data "save_data:save_data" \
-    --add-data "music:music" \
-    --add-data "world_map:world_map" \
-    --clean \
-    main.py
+pyinstaller --clean --noconfirm MilosStory.spec
 ```
+
+Same output: `dist/MilosStory.app` (plus `dist/MilosStory/` support folder inside the bundle).
 
 ## Windows Build
 
@@ -80,13 +75,13 @@ pyinstaller milos_story.spec
 ## Output
 
 After building, you'll find:
-- **Mac**: `dist/MilosStory` (executable file)
-- **Windows**: `dist/MilosStory.exe` (executable file)
+- **Mac**: `dist/MilosStory.app` (double-clickable app bundle). Saves and options go under `~/Library/Application Support/MilosStory/` when running the frozen app.
+- **Windows**: `dist/MilosStory.exe` (executable file) when built with the Windows scripts
 
 ## Troubleshooting
 
 ### Missing assets
-If the game can't find images or sounds, make sure all folders (`player`, `music`, `save_data`, `world_map`) are included in the build.
+If the game can't find images or sounds, ensure the **`assets/`** folder (with `music/`, `player/`, `background/`, etc.) is present before building; `MilosStory.spec` bundles it into the app.
 
 ### Console window appears
 If you see a console window, make sure `--windowed` flag is used (or `console=False` in the spec file).

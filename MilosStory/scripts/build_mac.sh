@@ -2,6 +2,10 @@
 # Build script for Mac executable
 # Run from project root or MilosStory directory
 
+# Do not create AppleDouble (._*) files during build — they break codesign / Gatekeeper
+export COPYFILE_DISABLE=1
+export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
+
 # Change to script directory, then to MilosStory project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -55,9 +59,9 @@ else
 fi
 echo ""
 
-# Clean previous builds
+# Clean previous builds (keep MilosStory.spec in repo)
 echo "[3/5] Cleaning previous builds..."
-rm -rf build dist *.spec
+rm -rf build dist
 echo "✓ Cleaned build artifacts"
 echo ""
 
@@ -79,18 +83,23 @@ echo "[5/5] Building executable (this may take a few minutes)..."
 echo "  Running PyInstaller..."
 echo ""
 
-# Use PyInstaller (python or python3)
-# For macOS, use onedir mode instead of onefile (onefile + windowed doesn't work well on Mac)
-$PY_CMD -m PyInstaller --name "MilosStory" \
-    --onedir \
-    --windowed \
-    --hidden-import=src.paths \
-    --hidden-import=jaraco.text \
-    --collect-submodules=jaraco \
-    $DATA_ARGS \
-    --clean \
-    --noconfirm \
-    main.py
+# Prefer checked-in spec (reliable .app bundle); fallback to CLI
+if [ -f "MilosStory.spec" ]; then
+    echo "  Using MilosStory.spec"
+    $PY_CMD -m PyInstaller --clean --noconfirm MilosStory.spec
+else
+    echo "  Using CLI (no MilosStory.spec found)"
+    $PY_CMD -m PyInstaller --name "MilosStory" \
+        --onedir \
+        --windowed \
+        --hidden-import=src.paths \
+        --hidden-import=jaraco.text \
+        --collect-submodules=jaraco \
+        $DATA_ARGS \
+        --clean \
+        --noconfirm \
+        main.py
+fi
 
 BUILD_EXIT_CODE=$?
 
@@ -101,41 +110,59 @@ if [ $BUILD_EXIT_CODE -eq 0 ]; then
     echo ""
     # Check for .app bundle (onedir windowed mode creates .app)
     if [ -d "dist/MilosStory.app" ]; then
-        echo "[6/6] Post-processing app bundle..."
+        echo "[6/6] Post-processing app bundle (Gatekeeper-safe)..."
         
-        # Remove macOS metadata files (._* files) that can cause signing/launch issues
-        echo "  Removing macOS metadata files..."
-        find dist/MilosStory.app -name "._*" -type f -delete 2>/dev/null
-        find dist/MilosStory.app -name "._*" -type d -delete 2>/dev/null
-        # Also remove from MacOS folder (critical - ._MilosStory can break launch)
-        rm -f dist/MilosStory.app/Contents/MacOS/._* 2>/dev/null
-        
-        # Remove quarantine attribute if it exists
-        echo "  Removing quarantine attribute..."
-        xattr -dr com.apple.quarantine dist/MilosStory.app 2>/dev/null || true
-        
-        # Ad-hoc sign the app bundle (required for distribution)
-        echo "  Signing app bundle..."
-        codesign --force --deep --sign - dist/MilosStory.app 2>&1 | grep -v "replacing existing signature" || true
-        
-        # Verify the signature
-        if codesign --verify --verbose dist/MilosStory.app 2>/dev/null; then
-            echo "  ✓ App bundle signed successfully"
+        SIGN_SCRIPT="$SCRIPT_DIR/macos_sign_app.sh"
+        if [ -f "$SIGN_SCRIPT" ]; then
+            chmod +x "$SIGN_SCRIPT" 2>/dev/null || true
+            bash "$SIGN_SCRIPT" "$PROJECT_DIR/dist/MilosStory.app"
         else
-            echo "  ⚠ Warning: Could not verify signature (may need manual signing)"
+            echo "  ⚠ macos_sign_app.sh missing; using basic cleanup + sign"
+            find dist/MilosStory.app -name '.DS_Store' -delete 2>/dev/null || true
+            find dist/MilosStory.app -name '._*' -delete 2>/dev/null || true
+            xattr -cr dist/MilosStory.app 2>/dev/null || true
+            codesign --remove-signature dist/MilosStory.app 2>/dev/null || true
+            codesign --force --sign - --deep --timestamp=none dist/MilosStory.app
         fi
+        
+        # User-facing note next to the app (zip dist/ with this file for players)
+        cat > dist/README_MAC_FIRST_OPEN.txt << 'EOF'
+Milo's Story — first launch on Mac
+==================================
+
+If macOS says the app "is damaged" or "may contain malware" and you click Cancel,
+macOS often will NOT show "Open Anyway" in Privacy & Security. That is normal.
+
+Fix (clears the download quarantine and bad metadata):
+
+1. Open Terminal (Cmd+Space, type Terminal).
+
+2. Run BOTH lines below. Replace the path if your app is not in Downloads:
+
+   xattr -cr ~/Downloads/MilosStory.app
+   open ~/Downloads/MilosStory.app
+
+   Tip: type "xattr -cr " (with a space), then drag MilosStory.app into Terminal
+   to paste its full path, then press Enter.
+
+3. If a dialog appears, click Open — not Cancel.
+
+4. Or: right-click MilosStory.app → Open → Open.
+
+Saves and options: ~/Library/Application Support/MilosStory/
+EOF
         
         echo ""
         echo "Mac App Bundle created: dist/MilosStory.app"
         echo "File size: $(du -sh dist/MilosStory.app 2>/dev/null | cut -f1 || echo 'unknown')"
         echo ""
-        echo "For distribution:"
-        echo "  Users may need to right-click and select 'Open' the first time"
-        echo "  (macOS Gatekeeper requires this for unsigned apps)"
+        echo "Also created: dist/README_MAC_FIRST_OPEN.txt (share with players)"
         echo ""
-        echo "You can run it with:"
+        echo "Test locally:"
         echo "  open dist/MilosStory.app"
-        echo "  or double-click MilosStory.app in Finder"
+        echo ""
+        echo "After copying from another Mac or the internet, run:"
+        echo "  xattr -cr dist/MilosStory.app"
     elif [ -f "dist/MilosStory" ]; then
         echo "Executable location: dist/MilosStory"
         echo "File size: $(du -h dist/MilosStory 2>/dev/null | cut -f1 || echo 'unknown')"

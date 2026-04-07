@@ -1,44 +1,63 @@
 # Mac Installation Instructions for Milo's Story
 
-## If you see "MilosStory.app is damaged and can't be opened"
+## If macOS says the app is "damaged" or "may contain malware"
 
-This is a common macOS security feature (Gatekeeper) that blocks unsigned apps. Here's how to fix it:
+That message often means **Gatekeeper** blocked the app (especially after download), not that the files are actually corrupt. If you click **Cancel**, newer macOS versions may **not** show **Open Anyway** under Privacy & Security — that is expected.
 
-### Method 1: Right-Click and Open (Easiest)
+### Fix that always works: Terminal (`xattr`)
 
-1. **Right-click** (or Control+Click) on `MilosStory.app`
-2. Select **"Open"** from the context menu
-3. Click **"Open"** in the security dialog that appears
-4. The app will now run normally, and you can double-click it in the future
-
-### Method 2: Remove Quarantine Attribute (For Advanced Users)
-
-If Method 1 doesn't work, open Terminal and run:
+1. Open **Terminal** (Spotlight: Cmd+Space, type `Terminal`).
+2. Run (change the path if the app is not in Downloads):
 
 ```bash
-xattr -dr com.apple.quarantine /path/to/MilosStory.app
+xattr -cr ~/Downloads/MilosStory.app
+open ~/Downloads/MilosStory.app
 ```
 
-Replace `/path/to/MilosStory.app` with the actual path to the app.
+**Tip:** Type `xattr -cr ` with a space at the end, then **drag** `MilosStory.app` from Finder into the Terminal window to paste the full path, then press Enter.
 
-For example, if it's in your Downloads folder:
+3. If a dialog appears, click **Open**, not Cancel.
+
+`xattr -cr` removes **quarantine** and other extended attributes that trigger the false "damaged" warning.
+
+### Right-click Open
+
+1. **Control+click** (or right-click) `MilosStory.app`.
+2. Choose **Open**.
+3. Click **Open** in the dialog.
+
+### Privacy & Security ("Open Anyway")
+
+This only appears in some cases **after** macOS has recorded a block:
+
+1. Open **System Settings** → **Privacy & Security**.
+2. Scroll down — look for a message about **MilosStory** being blocked.
+3. Click **Open Anyway** if it appears.
+
+If it **never** appears (common after you only pressed **Cancel**), use the **Terminal `xattr`** steps above.
+
+## Where saves and options are stored
+
+When running the **built app** (not from source):
+
+`~/Library/Application Support/MilosStory/`
+
+## For developers: rebuild with a clean signature
+
+From the `MilosStory` folder:
+
 ```bash
-xattr -dr com.apple.quarantine ~/Downloads/MilosStory.app
+./scripts/build_mac.sh
 ```
 
-Then try opening the app again.
+The build runs `scripts/macos_sign_app.sh` to strip `._*` files, clear xattrs, remove broken signatures, and ad-hoc sign again.
 
-### Method 3: System Preferences (If Still Blocked)
+To fix an existing `.app` someone sent you:
 
-1. Go to **System Preferences** (or **System Settings** on newer macOS)
-2. Click **Security & Privacy** (or **Privacy & Security**)
-3. Under the **General** tab, you should see a message about MilosStory.app being blocked
-4. Click **"Open Anyway"**
+```bash
+./scripts/fix_mac_app.sh /path/to/MilosStory.app
+```
 
-## Why This Happens
+## Apple Developer notarization
 
-macOS Gatekeeper protects your Mac by blocking apps that aren't signed with an Apple Developer certificate. Since this app is distributed independently, it doesn't have Apple's signature. The methods above allow you to bypass this security check for this specific app.
-
-## After First Launch
-
-Once you've opened the app using one of the methods above, macOS will remember your choice and you can double-click it normally in the future.
+To remove **all** Gatekeeper prompts for strangers downloading the app, you need an **Apple Developer** account and **notarization**. Ad-hoc signing (what this project uses) is fine for local use and friends if they run `xattr` once.
